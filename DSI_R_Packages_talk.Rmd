@@ -1,0 +1,156 @@
+---
+title: "DSI R Packages"
+author: "Michael Culshaw-Maurer"
+date: "1/19/2018"
+output: html_document
+---
+
+# Basics of packages
+- making R packages is easy, shouldn't be reluctant to do it
+- what is a package?
+    - it's an installable unit of R code
+    - it's a single collection of things
+    - it can be functions, it can be data, it can be both
+    - it SHOULD have documentation, doesn't NEED to
+    - it's easy to install and share with others
+- incentives for organizing stuff into packages
+    - much easier to install a package on another machine
+        - ESPECIALLY when working on a cluster
+    - really easy to send to someone else AND get help
+        - **Duncan especially likes this when helping people**
+
+# Working with packages
+
+This is what you should use for using local packages
+```{r, eval=F}
+install.packages("package", repos=NULL)
+install.packages("package.tar.gz", repos=NULL)
+```
+
+Use this to get stuff from github
+
+- here, you're installing from source
+- `install.packages` is probably downloading already binary
+- you should install from CRAN when possible but it's often not (or not the most up-to-date)
+```{r, eval=F}
+devtools::install_github("dsidavis/RMinPackage")
+```
+
+Local packages from terminal command line
+    - you can use a set of these commands for R in terminal, often fast and direct
+```{bash, eval=F}
+R CMD INSTALL package.tar.gz
+R CMD INSTALL packageDirectory
+```
+
+# Where is the package installed
+
+- library vs. package
+    - a library is a directory which contains one or more installed packages
+- R has recommended packages in its own R directory
+    - when you install a new package, you typically don't have permission to write there
+- R will ask you to create your own library directory
+- you can create this **ahead of time** as any directory
+- specify your own collection of R library directories
+    - R_LIBS or R_LIBS_USER environment variable as a **colon-separated** list of directories
+    - via `.libPaths()`
+        - this w/o arguments tells you where it's looking, with an argument will change where it looks
+- installing into personal "libraries"
+- **should create one in the home directory called "R_Packages"**
+
+`available.packages()` will go to CRAN mirror and give you lots of descriptions of packages
+`listfiles(.libPaths()[1])` will list all the packages, then put all of these into `install.packages()` to reinstall them somewhere else
+
+in your home directory you should have a ~/.RProfile where you can set `.libPaths()` and such
+
+# Packages- Loading and Attaching
+- Difference between loading a package and attaching to search path
+- Loading: refer explicitly to a variable in a package, load another package that imports/depends on package
+- Attaching: `library()` and `require()` will put that package in the search path so you can call functions
+- doing something with double colons like `dplyr::filter()` will look outside of the normal search path
+    - there's actually some computation going on when using the `::` but it's not bad
+    - it can make your code more rigid so maybe shouldn't use it
+- every package has its own little search path defined by its namespace
+- `:::` will get out objects that aren't intentionally available (some packages have stuff in them that you're not really supposed to access). For example
+- **the bigger the search path, the slower and more prone to error you'll be**
+- double colons will LOAD the package, library() will load AND attach it (put it on the search path)
+    - this is why you `detach()` packages
+- apparently you **don't** want to use library() or require(), using double colons can be better
+
+# R code in packages
+
+- when writing a package for your own use, anything goes
+    - don't need documentation, it's for you
+- for others to use, you need:
+    - the code to be robust to different inputs
+        - check class/type of inputs, lengths, NAs
+    - to provide meaningful error messages
+    - to provide good documentation, examples, and vignettes
+    - to answer questions promptly
+    - to avoid reimplementing functions in existing packages
+- make the functions flexible
+    - add parameters to allow the caller to specify values you compute
+    
+# Why write a package?
+
+- if you want to install on multiple machines
+- very easy and gives you a single unit instead of loose files
+- contributes to academic community
+- **you can write a package and write a short paper about that package and get a pub out of it**
+
+# Anatomy of a Package
+- directory containing:
+    - `DESCRIPTION` file
+    - `NAMESPACE` file
+    - `R` directory
+- additional directories
+    - `man` help files
+    - `tests` tests to check the package
+    - `data` data provided by the package
+    - `inst` other files to be installed with the package
+- Duncan has an RMinPackage on github "https://github.com/dsidavis/RPackagesWorkshop/tree/master/RMinPackage"
+    - honestly just copy this minimal stuff, then make an R directory, copy all your R files into it, and there you go, you have a package
+- `NAMESPACE` is where you define what you want to export to make available to people
+    - only export the stuff you want people to be able to use, ignore any helper functions you have
+- "Writing R extensions manual" is the bible of this stuff
+- Hadley also has an "R Packages" book that's good
+
+## Version Number
+
+- `major-minor.patch`
+- patch: fix a bug, documentation, etc. but no new features/functionality
+- minor: new feature, like new function, new parameter for function
+- major: 
+    - cumulative critical mass of new functionality worthy of note
+    - big change that makes it backwards-incompatible
+    
+## R Code
+
+- Put R code in R directory
+- typically a collection of functions
+- code will be source()d at installation time
+
+## Namespace
+
+- will NOT look in search path, only on the things that you include as imports
+- you could include several packages as imports, and the ORDER HERE MATTERS
+
+## Keywords/Concepts
+
+- underused, especially with roxygen
+    - defined set of keywords you can use
+- Concepts
+
+## action when a package loaded
+
+- when is it loaded but not attached?
+    - when :: is used
+    - when it's imported with another package
+    
+    
+`R CMD check mypackage` will check everything about whether your package works, you should do this before you commit a file
+
+`R CMD install --build` will build a binary version, which you can put on CRAN, but they'll probably ask you to change lots of stuff
+
+**you can distribute yourself**
+can also just use github (but don't wanna do this if you have proprietary data/code)

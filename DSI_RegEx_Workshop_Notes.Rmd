@@ -1,0 +1,119 @@
+---
+title: "DSI RegEx Workshop"
+author: "Michael Culshaw-Maurer"
+date: "12/1/2017"
+output: 
+  html_document:
+    theme: cosmo
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Intro
+
+- Regular expressions are weird, so we'll deal with cleaning data, RegEx, and reading data
+- "If you have a problem and regular expressions are the solution, you have **two** problems"
+- there's always a better answer
+    - if you're trying to read JSON, HTML, XML stuff, don't use
+    - if you're trying to analyze nouns, verbs, language, etc., there are better tools
+    - however, RegEx is a swiss army knife, it can do lots, but not the best at any
+    - they are like hieroglyphics
+
+## Cleaning Data
+
+- This is what we spend most of our time doing...
+- Cleaning data requires judgment and decision-making in the presence of ambiguity
+    - Difference btwn stats and math: mathematicians can't handle ambiguity...
+    - Should be very careful and **clear** about what steps you're taking and what decisions you're making
+- Cleaning requires thought about how data collection could lead to errors
+    - often general problems, but sometimes context-specific
+- Use auxiliary data to check data
+- Cleaning should exist as *part* of the data life cycle, not separate from it
+    - **reproducibility** is so key, especially if new data are going to be collected
+    - clean in a way such that you can reproduce your cleaning on the spot
+        - this can be tricky, for example, if someone changes row numbers or column names or something
+- cleaning data is done best when you know what you're going to do with it
+- Program defensively!
+    - don't assume anything
+    - don't assume your data won't change, you'll remember what you did, your assumptions are correct, you understand perfectly how errors occurred
+    - aim to write software instead of scripts
+        - Duncan thinks of software as other people can use your code, highly flexible. Scripts can do one thing
+- **don't rewrite CSV files unless your script has a ton of checks built in**
+- don't `na.omit()` or `complete.cases()` wildly because there might be missing values in columns you really don't care about or don't need for a given question, and you'll throw out tons of good data
+
+### R Functions Using RegEx
+
+- `grep()` and `grepl()`
+    - find which elements the pattern matches
+- `gregexpr()`/`regexpr()` and `regmatches()`
+    - find where in each element the pattern matches
+- `sub()`/`gsub()`
+    - substitute text for pattern match (dynamic)
+- `strsplit()`
+    - split a vector of strings, each into multiple elements
+    - sort of a reverse of `grep()`...
+    - it takes a vector you're looking in and splits based on the expression you give
+- `adist()`
+    - edit distance to see which strings are "close"
+- `agrep()`
+    - fuzzy/approximate matching of a pattern
+
+
+### Shell Commands
+
+- similar commands used in command line
+
+## Example using SF Housing data
+
+always start with this:
+```{r, eval = F}
+class(d)
+sapply(d, class)
+dim(d)
+names(d)
+summary(d)
+```
+
+
+- use `summary()` a lot
+- check `NA`s and see if any of your columns have the **same** number of `NA`s
+    - If there's a match, there may be something like your data got shifted over by 1 or something like that. It's likely that these cases have something in common, regardless
+- if you find errors, look for contiguous rows. If there are errors paired next to each other, that's a clue
+- avoid using explicit row numbers
+    - you can use quotes around a number which helps I guess? uhhhhhhhh **need to check this...**
+    - you should always use the criteria **you** used to identify the rows to ever refer to the rows
+    - you shouldn't look for specific instances, you should look for the condition you care about
+
+```{r}
+u = "https://raw.githubusercontent.com/dsidavis/data_cleaning_w_r/master/YearCountry.csv"
+d = read.csv(u, stringsAsFactors = FALSE)
+```
+
+```{r}
+head(d)
+```
+
+
+```{r}
+class(d)
+sapply(d, class)
+dim(d)
+names(d)
+summary(d)
+```
+
+
+Here's how to just make 1-31 ok
+```{r}
+tst = c("9", "13", "49", "09")
+grep("[0-9]|[12][0-9]|3[01]", tst)
+```
+I can't get this to work yet...
+
+```{r}
+tst = c("9", "13", "49", "31")
+grep("[12][0-9]|3[01]", tst)
+```
+

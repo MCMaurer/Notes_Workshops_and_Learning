@@ -1,0 +1,130 @@
+---
+title: "DSI_Parallel_Computing_Workshop_Notes"
+author: "Michael Culshaw-Maurer"
+date: "11/17/2017"
+output: html_document
+---
+
+  ```{r setup, include=FALSE}
+  knitr::opts_chunk$set(echo = TRUE)
+  ```
+## Intro
+
+- Parallel computing is "the wild west". It has lots of different ways to do it, no standards.
+- Check [the repository](github.com/dsidavis/parallelr) for stuff on this talk
+- speed is the ONLY real goal of parallel computing
+
+### Approaches
+- explicitly dispatch code to do tasks in parallel
+- replace serial code R uses with parallel implementations, like parallel BLAS library. Basic Linear Algebra Subroutines- it's a C++ collection of routines, linear alegbra routines for dealing with linear algebra. You can download BLAS for free, sometimes you need to tell R to use it, it can just pick it up. Modern BLAS uses multiple cores, it'll choose how much to use for a particular task. You **SHOULD BE USING ONE**. ATLAS is autotuning library is another one. 
+- identify computational bottlenecks by profiling code using Rprof(), summaryRprof() and several packages.
+- You may need to use different algorithm/computational strategy or write parts in C++, but this last option is crazy hard. Don't do it even if you know C. **Stay in R!**
+- change lapply() to mclapply(), sometimes it's that easy
+
+### What do we do in parallel?
+
+- many things could be parallelized, but not clear you always gain performance
+- embarassingly parallel tasks: independent sampling, resampling, grid search, matrix multiplication, reading two CSV files, group-by and compute on each group
+- sum(x)
+    + break x into chunks
+    + for each chunk, compute sum
+    + compute sum of chunk totals
+
+**Bootstrap definition: instead of using asymptotic estimators, we're gonna resample subset of data, do this over and over again and look at distribution of statistic. Do independent sample again and again, which we can do in parallel.**
+
+### Key Principle
+- Minimize transfer time of data to the worker nodes
+    + transferring data and getting it back is where you lose LOTS of speed
+- Maximize computational time on nodes *relative* to data transfer
+- Get the data chunks in the correct places
+
+### Technologies
+1. Shared memory, multicore
+    + memory
+    + disks
+    + network cards
+    + all three of these are shared
+2. Distributed memory, clustered computers
+3. Mix of distributed machines, each multicore
+
+1. Threads- within process parallel execution. We can't really do this in R, which is good, because they can corrupt each other. Code can run REALLY fast and give you the totally wrong number
+2. MPI
+3. Hadoop- distributed computing
+4. Spark
+5. GPUs- Graphical Processing Units
+
+## Easy Parallelism
+1. Use the shell
+    + Numerous jobs running in the background
+```{bash, eval = F}
+Rscript script1.R &
+Rscript script2.R &
+Rscript script3.R &
+```
+2. Multiple terminals/shells
+    + Open n terminals and run one shell command in each
+    + Shell can be on another machine- ssh
+3. make -j
+  + for many different tasks, not just compiling
+  + e.g. compiling R (building R from source)
+      + 3m 35s with 16 cores
+      + 6m 45s with 1 core
+  + not everything can be done in parallel
+      + have to wait for some to proceed
+
+### GNU Parallel
+1. Run the same command in parallel on separate inputs
+2. 22 years of airline delay data in bzip2 CSV files
+    + count the total number of records
+3. Unzip each file to standard output, count the lines
+```{bash, eval = F}
+time bunzip2 -c *bz2 | wc -l
+```
+4. Use parallel to run the same command on each file in parallel, then add the results together to get total
+    + the stuff in the "" is the command that's run on each individual file
+```{bash, eval = F}
+time ls *bz2 | parallel -j22 "bunzip2 -c {} | wc -l" | paste -sd+ - | bc
+```
+
+### Good General Practices Helping Parallel Computing
+- Since we'll be running the "same" code in parallel, in different R sessions and often on different machines, it's important to be able to easily "install" code and data on different machines
+- to ease this process, use:
+    + R packages
+    + version control: **use version control to git pull from your machine to cluster!!**
+
+## Easy stuff in R
+- the parallel package that comes with R
+- highest-level functions
+    + mclapply- this is the magic... **I should review stuff about lapply**
+    + mcmapply
+    + mcMap
+    + pvec
+
+- bootstrap a linear model **code on talk for bootstrapping chunk doesn't have replace=TRUE but it should be there**. Just check the github talk to see the full example.
+```{r}
+coef(lm(mpg ~ wt + cyl + am, mtcars[]))
+```
+
+*more cores is not always better*
+
+use function detectCores(), which reports 4, even if you really just have 2
+
+#### How mclapply() works
+- only on OSX, Linux, **not Windows**
+- **ONLY WORKS ON ONE MACHINE**
+- uses concept of fork() to create an exact clone of original process
+- new process can access the same memory as its parent
+    + so can see R objects in master's global environments
+- if both master and worker(s) treat data as read-only, no copies are made
+- if master or worker changes a shared object, immediately creates 2 separate copies
+- for each element of vector we are applying
+    + create a clone of the current R process
+    + send R function and arguments to clone
+    + invoke function in clone
+    + collect answers
+- only has mc.cores clones working at any time
+- there are a bunch of parameters to be used in mcapply
+- there can be a tradeoff between load balancing and transfer time. Load balancing puts more work onto faster computers, but it requires you to do transmission of any additional arguments to the lapply function (which could be quite bit).
+
+
+**Final warning: if you do a TON of parallel stuff with random number generating, you may actually hit the cycle of the random numbers, which is really bad. Doesn't happen much anymore but you should be aware of it. The real issue is that ALL of your workers get the same set.seed() that you set initially. Now mcapply takes care of this issue.**

@@ -1,0 +1,14 @@
+---
+title: "DSI_Computation_STEM_Workshop_notes"
+author: "Michael Culshaw-Maurer"
+date: "1/5/2018"
+output: html_document
+---
+
+
+
+
+
+
+
+

@@ -1,0 +1,101 @@
+---
+title: "TidyR and Joins"
+author: "R.D. Avis"
+date: "2/27/2018"
+output: html_document
+---
+
+# Purpose
+We are going to convert data from wide to long format and vice versa
+
+First we need to load our libraries
+
+```{r load_libraries, message = FALSE, warning = FALSE}
+library(tidyverse)
+```
+
+Now let's get our data
+
+```{r get_data}
+surveys <- read_csv("https://gge-ucd.github.io/R-DAVIS/data/portal_data_joined.csv")
+
+glimpse(surveys)
+```
+
+First, summarize these data.
+
+```{r summarize}
+surveys_gw <-
+  surveys %>%
+  filter(!is.na(weight)) %>% 
+  group_by(genus, plot_id) %>% 
+  summarize(mean_weight = mean(weight))
+
+glimpse(surveys_gw)
+
+head(surveys_gw)
+```
+
+Let's spread these data into wide format with a different plot id for each row, and different genera across columns
+
+```{r spread}
+surveys_gw %>% 
+  spread(key = genus, value = mean_weight)
+
+```
+
+Specify the fill value
+
+```{r fill_value_for_spread}
+surveys_gw %>% 
+  spread(key = genus, value = mean_weight, fill = 0)
+```
+
+Now we want to convert from wide format back to long format
+
+```{r}
+surveys_wide <-
+  surveys_gw %>% 
+  spread(key = genus, value = mean_weight, fill = 0)
+
+surveys_wide
+
+# When we gather(), we have to *think* about what the keys and values are
+
+surveys_wide %>% 
+  gather(key = genus, value = mean_weight, Baiomys:Spermophilus)
+
+surveys_wide %>% 
+  gather(key = the_genus, value = the_mean_weight, -plot_id)
+```
+# Challenge 1
+
+Spread the `surveys` data frame with year as columns, `plot_id` as rows, and the number of genera per plot per year as the values. You will need to summarize before reshaping, and use the function `n_distinct()` to get the number of unique genera within a partiuclar chunk of data.
+
+Hint: How do you need to summarize the data to count 
+
+
+
+
+```{r}
+genera_plot_year <- surveys %>%
+  group_by(plot_id, year) %>% 
+  summarise(num_genera = n_distinct(genus))
+
+glimpse(genera_plot_year)
+
+genera_plot_year %>% 
+  spread(key = year, value = num_genera)
+```
+
+
+```{r make_a_csv}
+
+surveys %>% 
+  group_by(year, plot_id) %>% 
+  summarize(unique_genera_count = n_distinct(genus)) %>% 
+  spread(key = year, value = unique_genera_count) %>% 
+  write_csv(path = "an.csv")
+
+```
+

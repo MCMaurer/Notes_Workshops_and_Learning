@@ -1,0 +1,706 @@
+---
+title: "R Fundamentals Workshop"
+author: "Michael Culshaw-Maurer"
+date: "1/26/2018"
+output: html_document
+---
+
+# Day 1
+#### 1/26/18
+
+### REPL
+
+- Most languages have a REPL- Read, Eval, Print Loop
+    - R waits for you to type things in
+    - You type stuff, hit enter, and it finishes the read
+- Psssst, it's actually Read/Parse, Eval, Print Loop
+    - Parsing is where it figures out "is this grammatically correct?"
+        - Doesn't matter if it *makes sense*, it just matters that the grammar is right
+    - You **need** to know if your bug is in the parsing or eval step
+    - If you type `1-`, it'll give you a `+` back in the prompt, telling you it's not *wrong* but it's waiting for more
+        - Control+C is a way to get rid of the `+` prompt
+- `parse()` will let you parse a function/file to **check if it makes sense**
+- Parsing is the **first** source of errors because it's the first thing R does
+    - you should really start with looking for parsing errors
+
+The following code won't work, because the `else` comes after a **complete, grammatically correct R call**
+```{r, error=T}
+if(T){
+  x=1
+}
+else
+  x=2
+```
+
+- `2xy = 1` won't work, because you're not allowed to have a variable name that starts with a digit
+
+These all work:
+```{r}
+2+ +3
+2++++++3
+2+ -3
+```
+
+```{r}
+e = parse(text = "2++3")
+class(e)
+e[[1]]
+e[[1]][[1]]
+```
+- Abstract Syntax Tree or Parse Tree
+    - `+` calls a **function**, it is not arithmetic
+    - **everything** in R is a function
+    
+This thinks you're trying to make a sentence following `if`
+```{r, error=T}
+class(if)
+```
+
+This backtick allows us to go in and get values directly
+```{r}
+class(`if`)
+`if`
+get("if")
+```
+
+```{r, error=T}
+2 +*3
+2 +=3
+```
+
+### Activities
+
+```{r, error=T}
+sum(10,20,30 40)
+```
+
+```{r, error=T}
+parse(text = "sum(10, 20, 30 40)")
+```
+
+```{r, error=T}
+x[[1][2]
+```
+This one will just give you a `+`
+```{r, error=T}
+x[[1]][2
+```
+
+This doesn't work because you're giving it a `[` before the `2` when it expects you to close that double bracket you started earlier
+```{r, error=T}
+x[[1][2]]
+```
+
+```{r}
+e = parse(text="pi")
+class(e)
+class(e[[1]])
+```
+
+Whoaaaaaaaaa, pi is actually a **name** for a value that is 3.14 etc.
+
+```{r}
+e = parse(text="T;TRUE")
+sapply(e,class)
+```
+
+`TRUE` is a logical, but `T` is just a name that refers to `TRUE`. You could change the value of `T` with `T=0` but you couldn't do that with `TRUE`
+
+```{r}
+class(0L)
+class(0)
+```
+
+
+```{r}
+class(I(0))
+yield ~ location + 2 * elevation^2 # this will use ^ for higher-order interaction terms
+yield ~ location + 2 * I(elevation^2) # this will actually use elevation squared
+```
+
+## Evaluator
+
+This is the simplest, it's a literal parse, a **literal** value
+```{r}
+2
+```
+
+This one looks for a name, `pi`, and then goes to find it along the search path. If you set `pi=2`, it'll look for it along the search path and find it in .GlobalEnv. You can use `find()` to find where something is. You can also directly call `base::pi` and it will find `3.141593` even if you've renamed `pi` in .GlobalEnv. If you messed up and gave a new value to `pi`, you can always use `rm(pi)` to remove your named variable from .GlobalEnv
+```{r}
+pi
+```
+
+Check what's in the search path with `search()`. The **order matters**.
+
+If you override the name of a function, you can also do all the above things, you can also use `get("c", mode = "function")` to only look for things named `c` that are **functions**
+
+```{r}
+head(ls("package:base"), 20)
+```
+
+
+`rm()` is pretty funky.
+
+
+```{r}
+e = parse(text = "a + 1")
+e[[1]][[1]]
+e[[1]][[2]]
+class(e[[1]])
+```
+
+what's happening here is that the **FIRST** thing in the parse is actually `+`. You're actually really doing `+(a,1)`. `a` and `1` are the **arguments** to the function `+`. R has looked for and found a function named `+`. Then R creates an environment that contains variables inside, which is also called a call frame. `a` is the first argument given, and there's no name for that parameter, it's not like `eval=F` where we need to give it the `eval=`. So `a` just gets matched to the first argument, and `1` gets matched to the remaining argument. This process is simple in the case of `+` because there are no names. `a` and `1` being assigned to these arguments to `+` are called *promises*, which is a part of *lazy evaluation*. Basically it doesnt't do anything yet, it just says "yeah ok we'll look up a and 1 when we need to".
+
+You're creating boxes inside boxes inside boxes. Like if you define a function, it's call frame exists within the .GlobalEnv. But then if you call `/` within your function, it's call frame exists within **your** function's call frame. It's important to be cognizant of **where** your current call frame is, and where things are being defined and where things are being searched for. In this case, arguments to `/` would look up to the arguments in the function which would look for things in the .GlobalEnv.
+
+Call frames only last as long as they are being evaluated. Like, if you called `/` in your function, the `/` call frame lasts as long as it takes to evaluate the `/` function. When that value is passed up to the original function, the call frame from `/` goes away. Basically, from what I understand, parsing is like creating this hierarchy of boxes based on the grammar you use, creating this whole nested structure, and then evaluation is going to the lowest level of boxes, evaluating, and passing those values on up through the boxes.
+
+Assignments like `=` actually also get call frames as well, but they coexist together, with `=` happening above `/`. This is called a call stack.
+
+Here's an important point: when the stats package is installed, it tells its functions, like `t.test()`, where to look for helper functions like `/`. It says "t.test can look in the stats package and base, and that's all". Each **package** has its own search path that is rigid and reliable. The structure of the call stack and such is **the same** but it's much more specific.
+
+**the search path always lists things in order of their parents. The parent of .GlobalEnv is "package:stats"** and so on.
+
+`parent.env(environment())` will show you this. When you change the search path, you're inherently changing this parental structure.
+
+## Assignment
+
+These are all the assignment forms:
+
+- =
+- <-
+- ->
+
+#### Non-Standard Evaluation (NSE)
+
+# Day 2
+#### 2/2/18
+
+### Summary of last time:
+
+- REPL
+    - R parses input into expressions, then evaluates
+    - Parsing problems
+- Literal values
+- Name objects- lookup variable
+- Find variable by searching along the `search()` path
+    - Collection of packages we load via `library()`
+- Everything is a call to a function
+    - `f(x,y)`
+    - `x + y` is `+(x,y)`
+    - `x[i]` is `[(x,i)`
+- How function calls work
+    - Call frame - environment object - variable name - value pairs
+- A promise becomes a value after the first time it needs to get evaluated
+    
+Let's say you call a function scatter.smooth which then calls xy.coords which then calls the [ function (it calls it because we decided to pass a subset of data to scatter.smooth in this example). The bracket function will first look to the call frame for xy.coord, but then it **DOES NOT** look to the call frame for scatter.smooth. It **WILL** look up the search path for xy.coord. If it did the first thing, the called functions would behave differently depending on **WHERE** they were called from, which would be terrible. So the *parent* for a particular function isn't necessarily the call frame of the next function up the call stack, so it's not really a nested series of boxes. The call stack and call frame search paths are **NOT** the same
+
+### New Stuff
+- `attach()` can really mess with your head because it messes with the search path
+    - now you have two copies, the data as it exists within the place you attached it from, and the place you've attached it to
+    - Don't **EVER** use attach
+    - Duncan can't even predict what's gonna happen when you use attach
+    - Essentially it's using the same name for the same thing in two different places
+
+```{r}
+f = y~x+bob
+class(f)
+```
+
+This will fail because it can't find mpg
+```{r, error=T}
+bob <- rnorm(nrow(mtcars))
+f = mpg~wt+bob
+lm(f)
+```
+
+This works because we're saying to look within mtcars. It will find "bob" elsewhere, in our global env
+```{r}
+lm(f, data=mtcars)
+```
+
+This will give the SAME answer as above:
+```{r}
+mpg <- rnorm(32)
+lm(f, mtcars)
+```
+
+This is Non-Standard Evaluation. It's looking in the data first, NOT into the search path. It will find mpg in mtcars, NOT in your global env.
+
+Formulas have their own environment
+```{r}
+environment(f)
+```
+
+
+```{r}
+g <- function(x, y = x+2) x/y
+g(2,y=3)
+g(y=3,2)
+g(y <- 3,2)
+# same as
+y <- 3
+g(y,2)
+```
+
+```{r}
+g <- function(x,y=x+2, z=1) x/y
+g(2,3, bob <- 10)
+bob
+```
+bob is **NOT** 10 because it was lazy evaluation because we never actually **USED** z, so `bob <- 10` was never evaluated
+
+### Function Calls
+
+- Step 1: Full name matching
+    - we first take all named arguments and matching the ones that exactly correspond to parameter names.
+    - ie if you say `family =` and there is an argument named `family` this is *exact*
+- Step 2: Partial name matching
+    - Now it'll look through and make partial matches
+    - `yla` would match `ylab`, whereas `yl` would match both `ylab` and `ylim`, so this would throw an error
+    - **important:** `lpa` would not do partial matching if there is a `...` in the arguments and `lpar` comes *after* the `...` in the list of argument names
+    - if there's a `...`, all the unmatched names will be sent here
+    - `...` can be a catchbin, it can also be used to pass arguments on to other functions
+        - ie if you call `plot()` within your function, you can pass plotting arguments to `...` in your function, and `plot()` will pick them up
+        - `...` is actually a special variable name
+        - if you debug and use `ls(all=T)` you will see `...`
+        - then, if you look at `list(...)`, you will see any arguments you initially passed there
+- Step 3: Unnamed argument matching
+    - unnamed arguments, often we do this with `data` or `x` or `y`, simple early arguments
+    - all unnamed arguments will be given in order of **remaining** parameters
+- typos like `lpard` will **NOT** do partial matching to `lpars`
+- we can use `match.call()`
+    - you put in a function and quote(), where quote contains the actual call to the function
+- you will **always** benefit from giving all argument names explicitly
+    - you should also eat lots of veggies, etc.
+    
+**WHEN YOU SEE A WARNING IN R, READ IT CAREFULLY BECAUSE, UNLIKE AN ERROR, YOU CAN'T KNOW WHAT'S GOING ON**
+    
+```{r}
+f <- function(a, ..., xyz = 10)
+{
+  
+}
+
+f(99, xy=20)
+```
+
+xyz stays as 10, and xy=20 will get passed to ...
+
+```{r}
+test.avg <- 
+  function(x, n = length(x)){
+    x = x[!is.na(x)]
+    sum(x)/n
+  }
+```
+
+```{r}
+y <- rnorm(10)
+y[c(2,9)] <- NA
+test.avg(y)
+mean(y, na.rm = T)
+```
+
+This will still work because of **Lazy Evaluation**. n hasn't been evaluated until **AFTER** you remove the NAs, in the function, so n will be 8 within the function, and your result will be correct.
+
+This will be wrong because you hard-assign n as 10, so it won't evaluate n as length(x) at all.
+```{r}
+test.avg(y, n = 10)
+```
+
+Here, you're forcing evaluation of n, you can also just say `force(n)` which is clearer. n starts as a promise, and promises only get evaluated once. You're forcing that promise to be evaluated early, and it will stay as 10 and your answer will be wrong
+```{r}
+test.avg2 <- 
+  function(x, n = length(x)){
+    n
+    x = x[!is.na(x)]
+    sum(x)/n
+  }
+
+test.avg2(y)
+```
+
+This works too, because n gets evaluated *after* you create y
+```{r}
+test.avg3 <- 
+  function(x, n = length(z)){
+    z = x[!is.na(x)]
+    sum(z)/n
+  }
+test.avg3(y)
+```
+
+**make sure** to use default values rather than specifying values within a function
+
+y doesn't change here. The x inside the function exists on its own. Functions in R do **NOT** change values in the caller. Copies are passed down, it won't mess with your original data.
+```{r}
+mod <- function(x){
+  x[!is.na(x)]
+}
+z <- mod(y)
+z
+y
+```
+
+The value returned here will be the value of the last expression evaluated
+```{r}
+f <- 
+  function(x){
+    if(length(x)>10) sum(x) 
+    else{x[1]}
+      }
+
+f(c(1,3))
+```
+
+In this case, since we're evaluating something of length < 10, the last expression evaluated is the "else" expression, so what gets returned is empty
+```{r}
+f <- 
+  function(x){
+    if(length(x)>10) sum(x) 
+    else{
+      x = (x+2)[-(1:2)]
+      x[1]
+      }
+      }
+
+f(c(1,3))
+```
+
+- `on.exit()` is a nice way to do some expression when you exit a function. You can close files, reset stuff, etc.
+
+
+# Day 3
+#### 2/9/18
+
+Remember, **everything is an object or a function call**
+
+### Data Types/Structures
+
+4 fundamental types, in order:
+1) Logical- TRUE, FALSE
+    - always use TRUE not T
+    - if you ask `length(TRUE)` it'll be 1 because it's a vector of length 1
+2) Integer- 1L, 2L, as.integer(4)
+3) Numeric- 1, 1.0, 2.5234, pi
+4) Character- "1", "chonch"
+
+```{r}
+class(2)
+class(as.integer(2))
+class(2L)
+identical(2L, as.integer(2))
+all.equal(2L, as.integer(2))
+all.equal(c(a=2L), as.integer(2))
+as.integer(2) == c(a=2L)
+all.equal(as.integer(2), 2)
+```
+- identical = **exactly** the same object
+- all.equal = are these two things the same, up to our computer's level of numerical accuracy?
+
+
+- a **vector** is an ordered collection of homogenous elements
+    - this'll happen by coercion
+```{r}
+class(c(TRUE, 1:10, 1.3))
+```
+- implicit coercion will kill you
+- good to be explicit about it
+- these next two examples give the same thing, but the first is more extensible
+```{r}
+as(1:10, "character")
+as.character(1:10)
+```
+
+The first two options give you a 2d structure, the last does NOT:
+```{r}
+x <- 1:10
+y <- rnorm(10)
+list(x, y)
+cbind(x,y)
+c(x,y)
+```
+
+- very often you want a **list** instead of a vector made with `c()` 
+    - a **list** can be heterogeneous
+
+- `attributes(x)` will give you the attributes of something
+```{r}
+attributes(mtcars)
+```
+- this gives us row names, column names, and the class
+```{r}
+attr(mtcars, "row.names")
+class(attr(mtcars, "row.names"))
+```
+```{r}
+z <- c(1:5, mtcars)
+class(z)
+length(z)
+length(mtcars)
+str(z)
+```
+
+```{r}
+a <- data.frame(x = 1:5, y = rnorm(5))
+b <- data.frame(w = 6:10, z = rnorm(5))
+cbind(a,b)
+```
+Gotta be careful here, because you would want to explicitly match up your id numbers:
+```{r}
+a <- data.frame(id = 1:5, x = 1:5, y = rnorm(5))
+b <- data.frame(id = 5:1, w = rnorm(5))
+```
+
+a data.frame is an ordered collection of columns of the same length, organized into a list
+```{r}
+class(mtcars)
+typeof(mtcars)
+```
+`typeof()` is a more primitive look at what something is
+
+
+This is really a numeric vector
+```{r}
+class(Sys.time())
+typeof(Sys.time())
+```
+
+A png can be represented as a vector of pixel identities of length rows*columns. This is actually how a matrix is represented too, as a big long vector.
+
+The picture is a long vector of pixels, arranged by columns, then we tell it with the attribute dims() how many rows and columns there are, so it can map every pixel in that vector to the right location.
+
+For color, we can then add **another dimension** for how many colors! So it's still just a single long vector of values, but you now know where to put that value and which RGB channel it belongs to.
+
+
+```{r}
+mtcars[[1]]
+mtcars[1:4,1]
+`[.data.frame`
+```
+
+```{r}
+fit <- lm(mpg ~ ., mtcars)
+class(fit)
+typeof(fit)
+plot(fit)
+stats:::plot.lm
+```
+
+You could create your OWN CLASS for an object and then create your own plot  function called like "plot.myclass", then if you call plot(x) on an object x that's your class, it'll KNOW to use plot.myclass as the automatic plot function. This is why doing `plot(fit)` above gives you some plots that make sense for `lm`. Plot says "I'm supposed to go find a method for this class, I'll go look for plot.whatever". If it can't find one at all, it'll just use the default
+
+This happens with functions that have this `UseMthod()` thing
+```{r}
+plot
+```
+
+```{r}
+vector("list", 3)
+list(3:10)
+```
+
+
+
+
+```{r}
+x = 1
+class(x) = "Picture"
+length(x)
+typeof(x)
+plot(x)
+x[] = 10
+x
+```
+
+### Subsetting
+
+These last two things are NOT the same
+```{r}
+x = 1:10
+x[] = 2
+x = 2
+```
+
+This is the same thing as our use of `x[]` above
+```{r}
+mtcars[1:2,]
+```
+
+This will treat mtcars as a **list** and grab the first two columns
+```{r}
+mtcars[1:2]
+```
+
+
+Whoaaaaaaaaaaaa...
+```{r}
+identical(mtcars[,1:2], mtcars[1:2])
+```
+
+If you subset an element of an object, you should get back something that's the same class
+
+Here's something interesting
+```{r}
+mtcars[,1]
+mtcars[,1, drop = FALSE]
+```
+This second thing says "don't drop the dimensions, don't drop it's 2-dimensional structure"
+
+
+This is bad because if you're computing i somewhere and then using it to subset later on, if i is of a different dimension, you get a different data type back later on
+```{r}
+i = 2
+mtcars[,i]
+class(mtcars[,i])
+i = c(2,3)
+class(mtcars[,i])
+```
+
+
+This doesn't make sense, you can't mix positive and negative indices
+```{r, warning=T, error=T}
+x = c(100, 200, 300)
+x[c(2,1,0,-1)]
+```
+
+It just ignores 0:
+```{r}
+x[c(2,1,0)]
+```
+
+```{r}
+x <- c(a=100, b=200, c=300)
+y <- c("a", "b", "a", "d", "e")
+match(y, names(x))
+match(y, names(x), 0)
+i <- match(y, names(x))
+x[i] # this one shows the NAs
+x[match(y, names(x), 0)] # this one gets rid of those NAs
+```
+
+subsetting by logical
+```{r}
+x>120
+x[x>120]
+```
+
+You don't really need this:
+```{r}
+x[which(x>120)]
+```
+
+Recycling rule!!
+```{r}
+y = 1:10
+y[x>120]
+```
+
+```{r, error=T}
+mtcars$bob <- 10
+mtcars$bob <- c(2,20)
+mtcars$bob <- c(2,20,30)
+```
+
+When we add 1, it's doing the same thing, recycling 1
+```{r}
+x
+x+1
+```
+
+This gives a warning, and it's serious
+```{r}
+x + c(2,3)
+```
+
+Factors are just integers, which represent categories, and then we give them a levels attribute, which are often characters. Levels is the unique set of possible values
+
+```{r}
+x <- sample(LETTERS, 60, replace = TRUE)
+table(x)
+y <- x[!(x %in% c("A", "D", "Z"))]
+table(y)
+yf <- factor(y)
+levels(yf)
+typeof(yf)
+as.integer(yf)
+```
+
+
+
+```{r}
+z <- factor(c("Europe", "Europe", "America", "Australia", "Asia", "Asia"))
+z
+# we now want to color the factors according to this list of colors
+c("red", "blue", "green", "purple")[z]
+```
+This works because z is just a vector of integers, so we're just subsetting
+
+
+```{r, warning=T}
+z[1] <- "Africa"
+z
+```
+
+```{r}
+z <- factor(c("Europe", "Europe", "America", "Australia", "Asia", "Asia"), levels = c("Europe", "America", "Australia", "Asia", "Africa"))
+z
+z[1] <- "Africa"
+```
+
+
+$ subsetting will let you go into a list, it's nice because we can also do partial matching
+```{r, error=T, warning=T}
+z <- list(abc=100, de=200)
+z$a
+z[[1]]
+z$abd
+z[[3]]
+(1:2)[3]
+z[[1]]
+z$a
+z[["a"]]
+z[1]
+```
+
+
+```{r}
+identical(z[1], 100)
+z[1] == 100
+```
+
+```{r}
+z = list("abc" = 1:4, "de" = 2:7, "xyz" = 1:10)
+z[1]
+z[1][]
+z[1][1]
+z[1][1][1]
+```
+
+```{r}
+i = 2
+z[i]
+i = c(2,1)
+z[[i]] # this gives you the first element of the second element of z, which is the 2 in "de"
+```
+
+
+try()/tryCatch()
+
+```{r, error=T}
+z[[4]]
+v = try(z[[4]])
+v
+class(v)
+
+```
+
+
+
+
+FOR LOOPS
+
+- sometimes necessary, if the ith iteration relies on i-1th iteration
+- sapply(x[x>10], FUN)
+
+split(measure, month) is similar to group_by(month)
